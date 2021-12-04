@@ -5,7 +5,7 @@ from exceptions import ActionError
 
 class King(Piece):
 
-    def __init__(self, colour: Colour, pos: Point, hp: int=1):
+    def __init__(self, colour: Colour, pos: Point, hp: int=4):
         super().__init__(4, hp, False, colour, pos, False, True)
 
     def __str__(self):

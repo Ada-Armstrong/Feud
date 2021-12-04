@@ -259,6 +259,7 @@ class Game:
 
     def skipAction(self) -> None:
         self.passes[self.turn] += 1
+        self.state = State.SWAP
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
 
     def listSwaps(self) -> Set[Tuple[Piece]]:
