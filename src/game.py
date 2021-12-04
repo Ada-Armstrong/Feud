@@ -244,7 +244,7 @@ class Game:
 
     def action(self, pos: Point, targets: List[Point]) -> None:
         if not self.canAction(pos, targets):
-            raise ActionError(f'Can\'t perform action {pos}: {targets}')
+            raise ActionError(f'Can\'t perform action {pos} {targets}')
 
         trgts = [self.pieces[p] for p in targets]
 
@@ -283,9 +283,9 @@ class Game:
 if __name__ == '__main__':
     from copy import deepcopy
     g = Game()
-    g2 = deepcopy(g)
-    #g.play()
-    g.swap((0,0), (1, 0))
-    print(g)
-    print('-'*30)
-    print(g2)
+    #g2 = deepcopy(g)
+    g.play()
+    #g.swap((0,0), (1, 0))
+    #print(g)
+    #print('-'*30)
+    #print(g2)

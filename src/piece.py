@@ -45,20 +45,22 @@ class Piece(ABC):
         self._hp -= 1
 
         if self._hp <= 0:
+            self._active = False
             self._swapable = False
             self._blocks = False
-            self.colour = None
+            self._colour = None
 
     def heal(self) -> None:
         self._hp = max(self._max_hp, self._hp + 1)
 
     def updateActivity(self, pieces: Pieces) -> None:
-        for i in self.neighbourPositions():
-            if self._colour == pieces[i]._colour:
-                self._active = True
-                return
-
-        self._active = False
+        if self._hp > 0:
+            for i in self.neighbourPositions():
+                if self._colour == pieces[i]._colour:
+                    self._active = True
+                    return
+        else:
+            self._active = False
 
     def canSwap(self, piece: 'Piece') -> bool: 
         return ((self._colour == piece._colour or piece._swapable)

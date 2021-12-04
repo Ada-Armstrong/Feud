@@ -35,21 +35,29 @@ class GameClient:
 
             if not self.validCode(status_code):
                 print(f'Recieved bad msg:\n{status_code}:{msg}')
-                return
+                continue
                 
             if cmd == packet.QUIT_CMD:
                 self.id = None
                 print(f'Quiting')
                 return
             elif cmd == packet.SYNC_CMD:
+                if msg not in [packet.SWAP_CMD, packet.ACTION_CMD]:
+                    print(f'Recieved bad msg:\n{status_code}:{msg}')
+                    return
+
                 request = input('Input turn: ')
+
                 packet.send(
                         self.socket,
                         packet.STATUS_CODE_SUCCESS,
-                        packet.SWAP_CMD,
+                        msg,
                         request
                         )
             elif cmd == packet.SWAP_CMD:
+                # update our local instance of the game
+                pass
+            elif cmd == packet.ACTION_CMD:
                 # update our local instance of the game
                 pass
             else:
@@ -66,4 +74,14 @@ class GameClient:
 if __name__ == '__main__':
     client = GameClient()
     client.connectToServer('localhost', 60555)
-    client.play()
+
+    try:
+        client.play()
+    except KeyboardInterrupt:
+        packet.send(
+                client.socket,
+                packet.STATUS_CODE_SUCCESS,
+                packet.QUIT_CMD,
+                'Bye'
+                )
+

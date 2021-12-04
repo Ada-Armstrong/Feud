@@ -1,6 +1,7 @@
 import socket
-from game import Game, State
 import packet
+from game import Game, State
+from exceptions import SwapError, ActionError
 
 
 class GameServer:
@@ -16,7 +17,8 @@ class GameServer:
         self.socket.listen()
         print(f'Server started on {ip}:{port}')
 
-    def __del__(self):
+    def shutdown(self):
+        self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
 
     def connectPlayers(self):
@@ -24,7 +26,7 @@ class GameServer:
 
         for i in range(self.NUM_PLAYERS):
             conn, addr = self.socket.accept()
-            self.goodCommand([conn], f'{packet.CONNECTED_CMD} {packet.SEPERATOR} {i}')
+            self.goodCommand(conn, packet.CONNECTED_CMD, f'{i}')
 
             print(f'Player connected from {addr}')
             self.players.append(conn)
@@ -34,12 +36,24 @@ class GameServer:
             return
 
         while 1:
+            if loser := (self.game.isolated() or self.game.kingDead()):
+                self.goodCommand(
+                        self.players,
+                        packet.QUIT_CMD,
+                        f'Player {loser} lost'
+                        )
+                for p in self.players:
+                    p.close()
+                return
+
             player = self.players[self.game.turn.value]
 
+            request_to_player = packet.SWAP_CMD if self.game.state == State.SWAP else packet.ACTION_CMD
             # send sync message to player
             self.goodCommand(
-                    [player],
-                    f'{packet.SYNC_CMD} {packet.SEPERATOR} Your turn'
+                    player,
+                    packet.SYNC_CMD,
+                    request_to_player
                     )
             
             status_code, cmd, msg = self.recv(player)
@@ -49,7 +63,8 @@ class GameServer:
             if cmd == packet.QUIT_CMD:
                 self.goodCommand(
                         self.players,
-                        f'{packet.QUIT_CMD} {packet.SEPERATOR} Player {player} quit'
+                        packet.QUIT_CMD,
+                        f'Player {self.game.turn} quit'
                         )
                 for p in self.players:
                     p.close()
@@ -63,9 +78,11 @@ class GameServer:
                     pos1 = self.game._str2cord(args[0])
                     pos2 = self.game._str2cord(args[1])
                 except:
+                    print(f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"')
                     self.badCommand(
-                            [player],
-                            f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"'
+                            player,
+                            packet.ERROR_CMD,
+                            f'Bad command'
                             )
                     continue
 
@@ -73,70 +90,72 @@ class GameServer:
                     self.game.swap(pos1, pos2)
                 except SwapError as e:
                     self.badCommand(
-                            [player],
-                            '{packet.ERROR_CMD} {packet.SEPERATOR} ' + str(e)
+                            player,
+                            packet.ERROR_CMD,
+                            str(e)
                             )
                     continue
             elif cmd == packet.ACTION_CMD:
                 args = msg.split()
 
                 try:
-                    if self.game.state != State.Action:
-                        raise
+                    if self.game.state != State.ACTION:
+                        raise RuntimeError('Wrong state')
 
                     num_args = len(args)
 
                     if num_args == 0:
                         self.game.skipAction()
                     else:
-                        poses = [self._str2cords(p) for p in args]
-                except:
+                        poses = [self.game._str2cord(p) for p in args]
+                        try:
+                            self.game.action(poses[0], poses[1:])
+                        except ActionError as e:
+                            self.badCommand(
+                                    player,
+                                    packet.ERROR_CMD,
+                                    str(e)
+                                    )
+                            continue
+                except Exception as e:
+                    print(f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"')
                     self.badCommand(
-                            [player],
-                            f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command {player_input}'
+                            player,
+                            packet.ERROR_CMD,
+                            f'Bad command'
                             )
                     continue
 
-                try:
-                    self.game.action(poses[0], poses[1:])
-                except ActionError as e:
-                    self.badCommand(
-                            player,
-                            '{packet.ERROR_CMD} {packet.SEPERATOR} ' + str(e)
-                            )
-                    continue
             else:
                 # unknown command
                 self.badCommand(
-                        [player],
-                        '{packet.ERROR_CMD} {packet.SEPERATOR} Unknown command'
+                        player,
+                        packet.ERROR_CMD,
+                        f'Unknown command'
                         )
                 continue
 
-            self.goodCommand(self.players, player_input)
+            self.goodCommand(self.players, cmd, msg)
             # TODO: temporary
+            print('*' * 50)
             print(self.game)
 
     def recv(self, conn):
         return packet.recv(conn)
 
-    def badCommand(self, targets, error_msg):
-        data = f'{packet.STATUS_CODE_SUCCESS}:' + error_msg
-        data = data.encode('utf-8')
+    def badCommand(self, targets, cmd, error_msg):
+        packet.send(targets, packet.STATUS_CODE_FAILURE, cmd, error_msg)
 
-        for conn in targets:
-            conn.sendall(data)
-
-    def goodCommand(self, targets, msg):
-        data = '{packet.STATUS_CODE_FAILURE}:' + msg
-        print(f'Sending {data}')
-        data = data.encode('utf-8')
-
-        for conn in targets:
-            conn.sendall(data)
+    def goodCommand(self, targets, cmd, msg):
+        packet.send(targets, packet.STATUS_CODE_SUCCESS, cmd, msg)
 
 if __name__ == '__main__':
     server = GameServer()
 
-    server.connectPlayers()
-    server.play()
+    try:
+        server.connectPlayers()
+        server.play()
+    except Exception as e:
+        print(e)
+    finally:
+        server.shutdown()

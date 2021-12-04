@@ -1,4 +1,5 @@
 import re
+from struct import pack, unpack, calcsize
 
 
 CONNECTED_CMD = 'CONNECTED'
@@ -13,13 +14,27 @@ SEPERATOR = '-'
 STATUS_CODE_SUCCESS = '200'
 STATUS_CODE_FAILURE = '400'
 
-PACKET_SIZE = 1024
+HEADER_FMT = '!I'
+HEADER_SIZE = calcsize(HEADER_FMT)
 
+
+def createHeader(payload_size):
+    if not (0 <= payload_size <= 2**32 - 1):
+        raise ValueError(f'payload_size must be in range [0, 2**32-1]')
+
+    header = pack(HEADER_FMT, payload_size)
+    return header
+
+def decodeHeader(header):
+    res = unpack(HEADER_FMT, header)
+    return res[0]
 
 def recv(socket):
-    data = socket.recv(PACKET_SIZE)
+    header = socket.recv(HEADER_SIZE)
+    packet_size = decodeHeader(header)
+
+    data = socket.recv(packet_size)
     res = data.decode()
-    print(f'recv\'d {res}')
 
     if not res:
         raise ValueError('Recieved an empty packet')
@@ -35,4 +50,12 @@ def send(socket, status_code, cmd, msg):
     data = f'{status_code}:{cmd} {SEPERATOR} {msg}'
     data = data.encode('utf-8')
 
-    socket.sendall(data)
+    header = createHeader(len(data))
+
+    if isinstance(socket, list):
+        for s in socket:
+            s.sendall(header)
+            s.sendall(data)
+    else:
+        socket.sendall(header)
+        socket.sendall(data)
