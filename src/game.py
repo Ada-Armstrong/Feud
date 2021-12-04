@@ -77,7 +77,6 @@ class Game:
 
         return (col, row)
 
-
     def play(self) -> None:
         while 1:
             print(self)
@@ -256,6 +255,10 @@ class Game:
                 self.pieces[i].updateActivity(self.pieces)
 
         self.state = State.SWAP
+        self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
+
+    def skipAction(self) -> None:
+        self.passes[self.turn] += 1
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
 
     def listSwaps(self) -> Set[Tuple[Piece]]:
