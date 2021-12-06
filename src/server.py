@@ -83,7 +83,8 @@ class GameServer:
 
         try:
             if self.game.state != State.SWAP or len(args) != 2:
-                raise
+                raise RuntimeError('Wrong state')
+
             pos1 = self.game._str2cord(args[0])
             pos2 = self.game._str2cord(args[1])
         except:

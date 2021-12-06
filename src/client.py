@@ -1,14 +1,26 @@
 import socket
 import packet
+from queue import Queue
+from game import Game
 
 
 class GameClient:
+
     def __init__(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.id = None
 
+        self.game = Game()
+        self.input_queue = Queue()
+
     def __del__(self):
         self.socket.close()
+
+    def addInput(self, in_str):
+        self.input_queue.put(in_str)
+
+    def getInput(self):
+        self.input_queue.get()
 
     def connectToServer(self, ip, port):
         self.socket.connect((ip, port))
@@ -46,23 +58,30 @@ class GameClient:
                     print(f'Recieved bad msg:\n{status_code}:{msg}')
                     return
 
-                request = input('Input turn: ')
+                request = self.getInput()
 
-                packet.send(
-                        self.socket,
-                        packet.STATUS_CODE_SUCCESS,
-                        msg,
-                        request
-                        )
+                self.send(packet.STATUS_CODE_SUCCESS, msg, request)
             elif cmd == packet.SWAP_CMD:
-                # update our local instance of the game
-                pass
+                args = msg.split()
+
+                pos1 = self.game._str2cord(args[0])
+                pos2 = self.game._str2cord(args[1])
+
+                self.game.swap(pos1, pos2)
             elif cmd == packet.ACTION_CMD:
-                # update our local instance of the game
-                pass
+                args = msg.split()
+
+                if len(args) == 0:
+                    self.game.skipAction()
+                else:
+                    poses = [self.game._str2cord(p) for p in args]
+                    self.game.action(poses[0], poses[1:])
             else:
                 print('Unknown command {cmd}')
                 return
+
+    def send(self, status_code, cmd, msg):
+        return packet.send(self.socket, status_code, cmd, msg)
 
     def recv(self):
         return packet.recv(self.socket)
@@ -78,10 +97,5 @@ if __name__ == '__main__':
     try:
         client.play()
     except KeyboardInterrupt:
-        packet.send(
-                client.socket,
-                packet.STATUS_CODE_SUCCESS,
-                packet.QUIT_CMD,
-                'Bye'
-                )
+        client.send(packet.STATUS_CODE_SUCCESS, packet.QUIT_CMD, 'Bye')
 

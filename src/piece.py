@@ -59,8 +59,8 @@ class Piece(ABC):
                 if self._colour == pieces[i]._colour:
                     self._active = True
                     return
-        else:
-            self._active = False
+
+        self._active = False
 
     def canSwap(self, piece: 'Piece') -> bool: 
         return ((self._colour == piece._colour or piece._swapable)

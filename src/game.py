@@ -3,6 +3,7 @@ from colour import Colour
 from exceptions import SwapError, ActionError, BoardError, InputError
 from typing import Type, Dict, List, Set, Tuple
 from enum import Enum
+from queue import Queue
 
 from empty import Empty
 from archer import Archer
@@ -38,6 +39,9 @@ class Game:
         self.setBoard()
         self.findKings()
         self.addPiecesToTeams()
+        
+        self.subscribers = []
+        self.input_queue = Queue()
 
     def __str__(self):
         out = ''
@@ -77,6 +81,22 @@ class Game:
 
         return (col, row)
 
+    def _cord2str(self, cord):
+        return chr(cord[0] + ord('a')) + str(cord[1] + 1)
+
+    def subscribe(self, callback) -> None:
+        self.subscribers.append(callback)
+
+    def notify(self, pos) -> None:
+        for callback in self.subscribers:
+            callback(pos, str(self.pieces[pos]))
+
+    def addInput(self, in_str):
+        self.input_queue.put(in_str)
+
+    def getInput(self):
+        return self.input_queue.get()
+
     def play(self) -> None:
         while 1:
             print(self)
@@ -89,7 +109,8 @@ class Game:
                 print(f'{self.turn} to swap')
 
                 while 1:
-                    start, end = input().replace(' ', '').split(',')
+                    start, end = self.getInput().split()
+                    print(f'{start} {end}')
 
                     try:
                         start_fmt = self._str2cord(start) 
@@ -108,7 +129,8 @@ class Game:
                 print(f'{self.turn} to action')
 
                 while 1:
-                    str_cords = input().replace(' ', '').split(',')
+                    str_cords = self.getInput().split()
+                    print(str_cords)
 
                     try:
                         cords = [self._str2cord(s) for s in str_cords]
@@ -226,9 +248,11 @@ class Game:
         # update activity of pieces and neighbours
         for i in p1.neighbourPositions():
             self.pieces[i].updateActivity(self.pieces)
+            self.notify(i)
 
         for i in p2.neighbourPositions():
             self.pieces[i].updateActivity(self.pieces)
+            self.notify(i)
 
         self.state = State.ACTION
 
@@ -249,10 +273,13 @@ class Game:
         trgts = [self.pieces[p] for p in targets]
 
         self.pieces[pos].applyAction(trgts, self.pieces)
+        self.notify(pos)
 
         for piece in trgts:
+            self.notify(piece._pos)
             for i in piece.neighbourPositions():
                 self.pieces[i].updateActivity(self.pieces)
+                self.notify(i)
 
         self.state = State.SWAP
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
