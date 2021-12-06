@@ -6,9 +6,11 @@ from game import Game
 
 class GameClient:
 
-    def __init__(self):
+    def __init__(self, cli_mode=False):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.id = None
+
+        self.cli_mode = cli_mode
 
         self.game = Game()
         self.input_queue = Queue()
@@ -44,6 +46,7 @@ class GameClient:
             print('*' * 30)
             print(f'{status_code=}\n{cmd=}\n{msg=}')
             print('*' * 30)
+            print(self.game)
 
             if not self.validCode(status_code):
                 print(f'Recieved bad msg:\n{status_code}:{msg}')
@@ -58,7 +61,7 @@ class GameClient:
                     print(f'Recieved bad msg:\n{status_code}:{msg}')
                     return
 
-                request = self.getInput()
+                request = input('> ') if self.cli_mode else self.getInput()
 
                 self.send(packet.STATUS_CODE_SUCCESS, msg, request)
             elif cmd == packet.SWAP_CMD:
@@ -91,7 +94,7 @@ class GameClient:
         
 
 if __name__ == '__main__':
-    client = GameClient()
+    client = GameClient(cli_mode=True)
     client.connectToServer('localhost', 60555)
 
     try:
