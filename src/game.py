@@ -1,10 +1,11 @@
-from piece import Piece, Pieces, Point, Action
-from colour import Colour
-from exceptions import SwapError, ActionError, BoardError, InputError
+import logging
 from typing import Type, Dict, List, Set, Tuple
 from enum import Enum
 from queue import Queue
 
+from piece import Piece, Pieces, Point, Action
+from colour import Colour
+from exceptions import SwapError, ActionError, BoardError, InputError
 from empty import Empty
 from archer import Archer
 from king import King
@@ -81,7 +82,7 @@ class Game:
 
         return (col, row)
 
-    def _cord2str(self, cord):
+    def _cord2str(self, cord) -> str:
         return chr(cord[0] + ord('a')) + str(cord[1] + 1)
 
     def subscribe(self, callback) -> None:
@@ -91,62 +92,62 @@ class Game:
         for callback in self.subscribers:
             callback(pos, str(self.pieces[pos]))
 
-    def addInput(self, in_str):
+    def addInput(self, in_str) -> None:
         self.input_queue.put(in_str)
 
-    def getInput(self):
+    def getInput(self) -> None:
         return self.input_queue.get()
 
     def play(self) -> None:
         while 1:
-            print(self)
+            logging.debug(self)
 
             if loser := (self.isolated() or self.kingDead()):
-                print(f'{loser} lost')
+                logging.debug(f'{loser} lost')
                 break
 
             if self.state == State.SWAP:
-                print(f'{self.turn} to swap')
+                logging.debug(f'{self.turn} to swap')
 
                 while 1:
                     start, end = self.getInput().split()
-                    print(f'{start} {end}')
+                    logging.debug(f'{start} {end}')
 
                     try:
                         start_fmt = self._str2cord(start) 
                         end_fmt = self._str2cord(end)
                     except InputError as e:
-                        print(e)
+                        logging.warning(e)
                         continue
 
                     try:
                         self.swap(start_fmt, end_fmt)
                         break
                     except SwapError as e:
-                        print(e)
+                        logging.warning(e)
 
             else:
-                print(f'{self.turn} to action')
+                logging.debug(f'{self.turn} to action')
 
                 while 1:
                     str_cords = self.getInput().split()
-                    print(str_cords)
+                    logging.debug(str_cords)
 
                     try:
                         cords = [self._str2cord(s) for s in str_cords]
                     except InputError as e:
-                        print(e)
+                        logging.warning(e)
                         continue
 
                     if len(cords) < 2:
-                        print('Need at least 2 cordinates to preform an action')
+                        logging.warning('Need at least 2 cordinates to preform an action')
                         continue
 
                     try:
                         self.action(cords[0], cords[1:])
                         break
                     except ActionError as e:
-                        print(e)
+                        logging.warning(e)
 
     def isolated(self) -> Colour:
         black = sum([p._active for p in self.team_pieces[Colour.BLACK]]) == 0
@@ -270,10 +271,11 @@ class Game:
         if not self.canAction(pos, targets):
             raise ActionError(f'Can\'t perform action {pos} {targets}')
 
+        action_piece = self.pieces[pos]
         trgts = [self.pieces[p] for p in targets]
 
         self.pieces[pos].applyAction(trgts, self.pieces)
-        self.notify(pos)
+        self.notify(action_piece._pos)
 
         for piece in trgts:
             self.notify(piece._pos)

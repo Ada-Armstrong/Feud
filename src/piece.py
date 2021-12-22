@@ -20,7 +20,8 @@ class Piece(ABC):
             colour: Colour,
             pos: Point,
             blocks: bool,
-            swapable: bool
+            swapable: bool,
+            max_trgts: int = 1
             ):
         self._max_hp: int = max_hp
         self._hp: int = hp
@@ -29,6 +30,7 @@ class Piece(ABC):
         self._pos: Point = pos
         self._blocks: bool = blocks
         self._swapable: bool = swapable
+        self._max_trgts: int = max_trgts
 
     def neighbourPositions(self, boardWidth: int=4) -> List[Point]:
         x_dir = [-1, 0, 1, 0]
@@ -74,7 +76,7 @@ class Piece(ABC):
         self._pos, piece._pos = piece._pos, self._pos
 
     def listSwaps(self, pieces: Pieces) -> Set[Tuple['Piece', 'Piece']]:
-        if not (self._active and self._swapable):
+        if not self._active:
             return set()
 
         indices = self.neighbourPositions()

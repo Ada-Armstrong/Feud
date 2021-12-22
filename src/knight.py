@@ -7,7 +7,7 @@ from itertools import combinations
 class Knight(Piece):
 
     def __init__(self, colour: Colour, pos: Point, hp: int=3):
-        super().__init__(3, hp, False, colour, pos, False, True)
+        super().__init__(3, hp, False, colour, pos, False, True, 2)
 
     def __str__(self):
         return f'{self._colour} N {self._hp} {self._active}'

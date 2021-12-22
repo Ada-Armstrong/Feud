@@ -1,3 +1,4 @@
+import logging
 import socket
 import packet
 from game import Game, State
@@ -5,6 +6,9 @@ from exceptions import SwapError, ActionError
 
 
 class GameServer:
+    '''
+    Server to sync clients game instances.
+    '''
     def __init__(self, ip='localhost', port=60555):
         self.NUM_PLAYERS = 2
         self.IP = ip
@@ -15,7 +19,7 @@ class GameServer:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((self.IP, self.PORT))
         self.socket.listen()
-        print(f'Server started on {ip}:{port}')
+        logging.info(f'Server started on {ip}:{port}')
 
     def shutdown(self):
         self.socket.shutdown(socket.SHUT_RDWR)
@@ -28,7 +32,7 @@ class GameServer:
             conn, addr = self.socket.accept()
             self.goodCommand(conn, packet.CONNECTED_CMD, f'{i}')
 
-            print(f'Player connected from {addr}')
+            logging.debug(f'Player connected from {addr}')
             self.players.append(conn)
 
     def play(self):
@@ -69,8 +73,8 @@ class GameServer:
 
             self.goodCommand(self.players, cmd, msg)
             # TODO: temporary
-            print('*' * 50)
-            print(self.game)
+            logging.debug('*' * 50)
+            logging.debug(self.game)
 
     def quit_cmd(self):
         self.goodCommand(self.players, packet.QUIT_CMD, f'Player {self.game.turn} quit')
@@ -88,7 +92,7 @@ class GameServer:
             pos1 = self.game._str2cord(args[0])
             pos2 = self.game._str2cord(args[1])
         except:
-            print(f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"')
+            logging.warning(f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"')
             self.badCommand(player, packet.ERROR_CMD, f'Bad command')
             return False
 
@@ -117,7 +121,7 @@ class GameServer:
                     self.badCommand(player, packet.ERROR_CMD, str(e))
                     return False
         except Exception as e:
-            print(f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"')
+            logging.warning(f'{packet.ERROR_CMD} {packet.SEPERATOR} Bad command "{player_input}"')
             self.badCommand(player, packet.ERROR_CMD, f'Bad command')
             return False
 
@@ -133,12 +137,13 @@ class GameServer:
         packet.send(targets, packet.STATUS_CODE_SUCCESS, cmd, msg)
 
 if __name__ == '__main__':
+    logging.basicConfig(format='%(levelname)s <%(asctime)s> %(message)s', level=logging.DEBUG)
     server = GameServer()
 
     try:
         server.connectPlayers()
         server.play()
     except Exception as e:
-        print(e)
+        logging.error(e)
     finally:
         server.shutdown()

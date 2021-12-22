@@ -16,6 +16,7 @@ class View:
         self.display.fill((255, 255, 255))
         self.font = pygame.freetype.SysFont(name='Comic Sans', size=24)
 
+        # tile dimensions
         self.rect_width = self.res[0] / self.game.WIDTH
         self.rect_height = self.res[1] / self.game.HEIGHT
 
@@ -66,9 +67,11 @@ class View:
     def possibleActions(self):
         if not (n := len(self.selection)):
             possible_actions = {p._pos for action in self.game.listActions() for p in action}
-        elif n >= 1:
+        elif 1 <= n <= self.game.pieces[self.selection[0]]._max_trgts:
             piece = self.game.pieces[self.selection[0]]
             possible_actions = {p._pos for action in piece.listActions(self.game.pieces) for targets in action.values() for p in targets}
+        else:
+            possible_actions = set()
 
         return possible_actions
 
@@ -140,4 +143,7 @@ if __name__ == '__main__':
     g_thread.start()
 
     view = View(game)
-    view.start()
+    try:
+        view.start()
+    except KeyboardInterrupt:
+        pass
