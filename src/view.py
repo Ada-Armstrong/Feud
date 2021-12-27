@@ -4,21 +4,24 @@ from game import Game, State
 
 class View:
 
-    def __init__(self, game, addInput=None, resolution=(640, 480)):
-        pygame.init()
+    def __init__(self, game, display=None, addInput=None, resolution=(640, 480)):
+        if not pygame.get_init():
+            pygame.init()
 
-        self.res = resolution
         self.game = game
         self.game.subscribe(self.drawTile)
         self.addInput = self.game.addInput if addInput is None else addInput
 
-        self.display = pygame.display.set_mode(self.res)
+        self.res = resolution
+        self.standalone = display == None
+        self.display = display if display else pygame.display.set_mode(self.res)
         self.display.fill((255, 255, 255))
         self.font = pygame.freetype.SysFont(name='Comic Sans', size=24)
 
         # tile dimensions
-        self.rect_width = self.res[0] / self.game.WIDTH
-        self.rect_height = self.res[1] / self.game.HEIGHT
+        smaller_dim = min(self.res[0], self.res[1])
+        self.rect_width = smaller_dim / self.game.WIDTH
+        self.rect_height = smaller_dim / self.game.HEIGHT
 
         self.selection = []
 
@@ -26,9 +29,14 @@ class View:
         self.drawAllTiles()
 
         while True:
+            if self.game.won:
+                print('FINISHED')
+                return
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
+                    if self.standalone:
+                        pygame.quit()
                     return
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     x_screen, y_screen = pygame.mouse.get_pos()
@@ -132,17 +140,18 @@ class View:
                 rect=(self.rect_width*x + border_width/2, self.rect_height*y + border_width / 2, self.rect_width - border_width, self.rect_height - border_width),
                 width=0
                 )
-        self.font.render_to(self.display, (self.rect_width*(x + 0.5), self.rect_height*(y + 0.5)), f'{piece_type} {hp}', text_color)
+        if int(hp) > 0:
+            self.font.render_to(self.display, (self.rect_width*(x + 0.5), self.rect_height*(y + 0.5)), f'{piece_type} {hp}', text_color)
 
 
 if __name__ == '__main__':
     import threading
 
     game = Game()
-    g_thread = threading.Thread(target=game.play)
+    g_thread = threading.Thread(target=game.play, daemon=True)
     g_thread.start()
 
-    view = View(game)
+    view = View(game, resolution=(1920, 1080))
     try:
         view.start()
     except KeyboardInterrupt:

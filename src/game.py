@@ -1,5 +1,5 @@
 import logging
-from typing import Type, Dict, List, Set, Tuple
+from typing import Type, Dict, List, Set, Tuple, Optional
 from enum import Enum
 from queue import Queue
 
@@ -27,9 +27,11 @@ class Game:
         self.WIDTH: int = 4
         self.HEIGHT: int = 4
 
+        self.won: Optional[Colour] = None
         self.state: State = State.SWAP
         self.turn: Colour = Colour.BLACK
         self.passes: Dict[Type[Colour], int] = {Colour.BLACK:0, Colour.WHITE:0}
+        self.max_passes: int = 2
 
         self.pieces: Pieces = {
                 (x, y):Empty((x,y))
@@ -102,8 +104,15 @@ class Game:
         while 1:
             logging.debug(self)
 
-            if loser := (self.isolated() or self.kingDead()):
-                logging.debug(f'{loser} lost')
+            if loser := (self.isolated() or self.kingDead() or self.passes[self.turn] > self.max_passes):
+                if loser == Colour.BLACK:
+                    self.won = Colour.WHITE
+                elif loser == Colour.WHITE:
+                    self.won = Colour.BLACK
+                else:
+                    self.won = Colour.BOTH
+
+                logging.debug(f'{self.won} won')
                 break
 
             if self.state == State.SWAP:
@@ -138,6 +147,10 @@ class Game:
                     except InputError as e:
                         logging.warning(e)
                         continue
+
+                    if len(cords) == 0:
+                        self.skipAction()
+                        break
 
                     if len(cords) < 2:
                         logging.warning('Need at least 2 cordinates to preform an action')
@@ -283,6 +296,7 @@ class Game:
                 self.pieces[i].updateActivity(self.pieces)
                 self.notify(i)
 
+        self.passes[self.turn] = 0
         self.state = State.SWAP
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
 

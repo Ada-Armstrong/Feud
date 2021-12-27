@@ -53,7 +53,7 @@ class Piece(ABC):
             self._colour = None
 
     def heal(self) -> None:
-        self._hp = max(self._max_hp, self._hp + 1)
+        self._hp = min(self._max_hp, self._hp + 1)
 
     def updateActivity(self, pieces: Pieces) -> None:
         if self._hp > 0:
