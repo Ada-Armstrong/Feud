@@ -1,4 +1,5 @@
 import pygame
+import time
 from game import Game, State
 
 
@@ -27,6 +28,7 @@ class View:
 
     def start(self):
         self.drawAllTiles()
+        self.drawState()
 
         while True:
             if self.game.won:
@@ -58,6 +60,9 @@ class View:
                         move_string = ' '.join([self.game._cord2str(p) for p in self.selection])
                         self.addInput(move_string)
                         self.selection.clear()
+                        time.sleep(0.1)
+
+                self.drawState()
 
             pygame.display.update()
 
@@ -96,10 +101,35 @@ class View:
         if pos not in self.selection and pos in self.possibleActions():
             self.selection.append(pos)
         elif pos in self.selection:
-            self.selection.remove(pos)
+            i = self.selection.index(pos)
+            if i != 0:
+                self.selection.remove(pos)
+            else:
+                self.selection.clear()
 
         for p in self.possibleActions():
             self.drawTile(p, str(self.game.pieces[p]), (255, 165, 0))
+
+    def drawState(self):
+        x_offset = self.rect_width*self.game.WIDTH
+        text_y_offset = self.font.size
+
+        whose_turn = 'Black' if str(self.game.turn) == 'Colour.BLACK' else 'White'
+        turn_type = 'Swap' if str(self.game.state) == 'State.SWAP' else 'Action'
+        black_passes, white_passes = self.game.passes.values()
+
+        black = (0, 0, 0)
+
+        pygame.draw.rect(
+                surface=self.display,
+                color=(128,128,128),
+                rect=(x_offset, 0, self.res[0]-x_offset, self.res[1]),
+                width=0
+                )
+
+        self.font.render_to(self.display, (x_offset, text_y_offset), f'{whose_turn}\'s {turn_type}', black)
+        self.font.render_to(self.display, (x_offset, text_y_offset*2), f'Black Passes: {black_passes}', black)
+        self.font.render_to(self.display, (x_offset, text_y_offset*3), f'White Passes: {white_passes}', black)
 
     def drawAllTiles(self):
         for col in range(self.game.WIDTH):

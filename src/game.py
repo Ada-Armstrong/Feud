@@ -104,7 +104,7 @@ class Game:
         while 1:
             logging.debug(self)
 
-            if loser := (self.isolated() or self.kingDead() or self.passes[self.turn] > self.max_passes):
+            if loser := (self.isolated() or self.kingDead() or self.tooManyPasses()):
                 if loser == Colour.BLACK:
                     self.won = Colour.WHITE
                 elif loser == Colour.WHITE:
@@ -178,6 +178,19 @@ class Game:
     def kingDead(self) -> Colour:
         black = self.kings[Colour.BLACK]._hp <= 0
         white = self.kings[Colour.WHITE]._hp <= 0
+
+        if black and white:
+            return Colour.BOTH
+        elif black:
+            return Colour.BLACK
+        elif white:
+            return Colour.WHITE
+
+        return None
+
+    def tooManyPasses(self) -> Colour:
+        black = self.passes[Colour.BLACK] > self.max_passes
+        white = self.passes[Colour.WHITE] > self.max_passes
 
         if black and white:
             return Colour.BOTH
@@ -273,6 +286,7 @@ class Game:
     def canAction(self, pos: Point, targets: List[Point]) -> bool:
         if (self.state != State.ACTION
                 or not self._inbound(pos)
+                or self.pieces[pos]._colour != self.turn
                 or sum([not self._inbound(p) for p in targets])):
             return False
 
