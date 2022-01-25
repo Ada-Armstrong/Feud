@@ -9,9 +9,22 @@ Action = Dict['Piece', List['Piece']]
 
 class Piece(ABC):
     '''
-    An abstract base class for a Feud Piece.
-    Implements swapping functionality.
+    An abstract base class for a Feud Piece. Implements swapping functionality.
+
+    Attributes:
+    _max_hp: The maximum number of hit points the piece can have.
+    _hp: The current hit points the piece has.
+    _active: A boolean that tracks whether the piece is active.
+    _colour: The team which the piece belongs to.
+    _pos: A tuple (x, y) representing the position of the piece on the board.
+    _blocks: A boolean that tracks if the piece blocks projectiles.
+    _swpable: A boolean that tracks if the piece is swapable by enemies.
+    _max_trgts: The maximum number of pieces that can be targeted with an action.
     '''
+
+    x_dir = [-1, 0, 1, 0]
+    y_dir = [0, 1, 0, -1] 
+
     def __init__(
             self,
             max_hp: int,
@@ -24,7 +37,7 @@ class Piece(ABC):
             max_trgts: int = 1
             ):
         self._max_hp: int = max_hp
-        self._hp: int = hp
+        self._hp: int = min(hp, max_hp)
         self._active: bool = active
         self._colour: Optional[Colour] = colour
         self._pos: Point = pos
@@ -33,9 +46,7 @@ class Piece(ABC):
         self._max_trgts: int = max_trgts
 
     def neighbourPositions(self, boardWidth: int=4) -> List[Point]:
-        x_dir = [-1, 0, 1, 0]
-        y_dir = [0, 1, 0, -1]
-        return [ (x, y) for i in range(len(x_dir)) if 0 <= (x := self._pos[0]+x_dir[i]) < boardWidth and 0 <= (y := self._pos[1]+y_dir[i]) < boardWidth ]
+        return [ (x, y) for i in range(len(self.x_dir)) if 0 <= (x := self._pos[0]+self.x_dir[i]) < boardWidth and 0 <= (y := self._pos[1]+self.y_dir[i]) < boardWidth ]
 
     def distance(self, piece: 'Piece') -> int:
         return abs(self._pos[0]-piece._pos[0]) + abs(self._pos[1]-piece._pos[1])

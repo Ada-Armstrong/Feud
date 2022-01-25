@@ -22,29 +22,35 @@ class State(Enum):
 TeamPieces = Dict[Type[Colour], List[Type[Piece]]]
 
 class Game:
+    """
+    Manages the board and game state for Feud.
+
+    Attributes:
+        WIDTH: The width of the board.
+        HEIGHT: The HEIGHT of the board.
+        max_passes: The maximum number of passes a player can do before forfeiting.
+        msg_types: A list of legal message types for subscribe and notify.
+        subscribers: A dict containing the callback functions for each message type.
+        input_queue: A queue that stores the moves to be played.
+        won: The team Colour which has won.
+        state: Whether the game is in SWAP or ACTION.
+        turn: Whose turn it is to play.
+        passes: A dict containing the number of passes for each player.
+        pieces: A dict mapping each position on the board to a piece.
+        team_pieces: A dict which contains a list for each player's pieces.
+        kings: A dict that tracks the location of each team's king.
+    """
 
     def __init__(self):
         self.WIDTH: int = 4
         self.HEIGHT: int = 4
-
-        self.won: Optional[Colour] = None
-        self.state: State = State.SWAP
-        self.turn: Colour = Colour.BLACK
-        self.passes: Dict[Type[Colour], int] = {Colour.BLACK:0, Colour.WHITE:0}
         self.max_passes: int = 2
 
-        self.pieces: Pieces = {
-                (x, y):Empty((x,y))
-                for x in range(self.WIDTH) for y in range(self.HEIGHT)}
-        self.team_pieces: TeamPieces = {Colour.BLACK: [], Colour.WHITE: []}
-        self.kings: Dict[Type[Colour], Piece] = {Colour.BLACK:None, Colour.WHITE:None}
-
-        self.setBoard()
-        self.findKings()
-        self.addPiecesToTeams()
-        
-        self.subscribers = []
+        self.msg_types = ['board', 'turn']
+        self.subscribers = {msg_type:[] for msg_type in self.msg_types}
         self.input_queue = Queue()
+
+        self.resetBoard()
 
     def __str__(self):
         out = ''
@@ -72,7 +78,43 @@ class Game:
 
         return result
 
+    def resetBoard(self) -> None:
+        """
+        Changes the board's state so that it is ready for a new game.
+
+        Returns:
+            None
+        """
+        self.won: Optional[Colour] = None
+        self.state: State = State.SWAP
+        self.turn: Colour = Colour.BLACK
+        self.passes: Dict[Type[Colour], int] = {Colour.BLACK:0, Colour.WHITE:0}
+
+        self.pieces: Pieces = {
+                (x, y):Empty((x,y))
+                for x in range(self.WIDTH) for y in range(self.HEIGHT)}
+
+        self.team_pieces: TeamPieces = {Colour.BLACK: [], Colour.WHITE: []}
+        self.kings: Dict[Type[Colour], Piece] = {Colour.BLACK:None, Colour.WHITE:None}
+        self.setBoard()
+        self.findKings()
+        self.addPiecesToTeams()
+
     def _str2cord(self, string: str) -> Tuple[int, int]:
+        """
+        Converts a string that represents a coordinate on the board to a tuple
+        containing the (col, row) indices. The string must be in the following
+        format: [a-d][1-4]
+
+        Args:
+            string: The coordinate string.
+
+        Returns:
+            A tuple, column by row, that the string coordinate represented on the board.
+
+        Raises:
+            InputError: If string is not in the correct format.
+        """
         if len(string) != 2:
             raise InputError('Too many characters provided as coordinate')
 
@@ -80,27 +122,101 @@ class Game:
             col = ord(string[0].lower()) - ord('a')
             row = int(string[1]) - 1
         except TypeError as e:
-            raise InputError('Coordinate must be in the format [A-D][1-4]')
+            raise InputError('Coordinate must be in the format [a-d][1-4]')
 
         return (col, row)
 
-    def _cord2str(self, cord) -> str:
+    def _cord2str(self, cord: Tuple[int, int]) -> str:
+        """
+        Inverse of _str2cord. Returns the string representation of the board
+        coordinate.
+
+        Args:
+            cord: The coordinate on the board to convert (col, row).
+
+        Returns:
+            A string representation of the board coordinate. Will be in the
+            following format: [a-d][1-4]
+        """
         return chr(cord[0] + ord('a')) + str(cord[1] + 1)
 
-    def subscribe(self, callback) -> None:
-        self.subscribers.append(callback)
+    def subscribe(self, callback, msg_type='board') -> None:
+        """
+        Subscribes a callback function to a specific msg_type. For example
+        msg_type=board calls the callback function whenever a piece is moved or
+        mutated on the board.
 
-    def notify(self, pos) -> None:
-        for callback in self.subscribers:
-            callback(pos, str(self.pieces[pos]))
+        Args:
+            callback: The callback function to run when notify is called for the
+                        message type. For msg_type=board the callback must take
+                        pos, string
+            msg_type: A string representing the types of message to subscribe to.
 
-    def addInput(self, in_str) -> None:
+        Returns:
+            None
+
+        Raises:
+            TypeError: If msg_type is not valid.
+        """
+        if msg_type not in self.msg_types:
+            raise TypeError(f'{msg_type} not a valid msg_type')
+        self.subscribers[msg_type].append(callback)
+
+    def notify(self, pos=None, msg_type: str='board') -> None:
+        """
+        Runs the callback functions for a specific msg_type.
+
+        Args:
+            msg_type: A string representing the types of message to run callback
+                        functions for.
+
+        Returns:
+            None
+
+        Raises:
+            TypeError: If msg_type is not valid.
+        """
+        if msg_type not in self.msg_types:
+            raise TypeError(f'{msg_type} not a valid msg_type')
+
+        if msg_type == 'board':
+            data = [pos, str(self.pieces[pos])]
+        elif msg_type == 'turn':
+            data = [str(self.turn), str(self.state)]
+
+        for callback in self.subscribers[msg_type]:
+            #callback(pos, str(self.pieces[pos]))
+            callback(*data)
+
+    def addInput(self, in_str: str) -> None:
+        """
+        Queues a move.
+
+        Args:
+            in_str: The move to queue in string format. See _str2cord for the
+                        format that the string should be in.
+
+        Returns:
+            None
+        """
         self.input_queue.put(in_str)
 
-    def getInput(self) -> None:
+    def getInput(self) -> str:
+        """
+        Retrieves the first element in the input queue.
+
+        Returns:
+            A string representing a move.
+        """
         return self.input_queue.get()
 
     def play(self) -> None:
+        """
+        Starts the game loop.
+
+        Returns:
+            None
+        """
         while 1:
             logging.debug(self)
 
@@ -114,6 +230,8 @@ class Game:
 
                 logging.debug(f'{self.won} won')
                 break
+
+            self.notify(msg_type='turn')
 
             if self.state == State.SWAP:
                 logging.debug(f'{self.turn} to swap')
@@ -162,46 +280,71 @@ class Game:
                     except ActionError as e:
                         logging.warning(e)
 
+    def _winnerFromBools(self, black: bool, white: bool) -> Colour:
+        """
+        Helper function that returns a colour according to the arguments. 
+
+        Args:
+            black: whether black satisfies the condition.
+            white: whether white satisfies the condition.
+
+        Returns:
+            The colour which satisfies the condition.
+        """
+        if black and white:
+            return Colour.BOTH
+        elif black:
+            return Colour.BLACK
+        elif white:
+            return Colour.WHITE
+        else:
+            return None
+
     def isolated(self) -> Colour:
+        """
+        Checks if either team is isolated.
+
+        Returns:
+            The colour which is isolated.
+        """
         black = sum([p._active for p in self.team_pieces[Colour.BLACK]]) == 0
         white = sum([p._active for p in self.team_pieces[Colour.WHITE]]) == 0
 
-        if black and white:
-            return Colour.BOTH
-        elif black:
-            return Colour.BLACK
-        elif white:
-            return Colour.WHITE
+        return self._winnerFromBools(black, white)
 
-        return None
 
     def kingDead(self) -> Colour:
+        """
+        Checks if the kings are alive.
+
+        Returns:
+            The colour for which the king is dead.
+        """
         black = self.kings[Colour.BLACK]._hp <= 0
         white = self.kings[Colour.WHITE]._hp <= 0
 
-        if black and white:
-            return Colour.BOTH
-        elif black:
-            return Colour.BLACK
-        elif white:
-            return Colour.WHITE
-
-        return None
+        return self._winnerFromBools(black, white)
 
     def tooManyPasses(self) -> Colour:
+        """
+        Checks if either team has exceed the allowed number of passes.
+
+        Returns:
+            The colour which has exceed the allowed number of passes.
+        """
         black = self.passes[Colour.BLACK] > self.max_passes
         white = self.passes[Colour.WHITE] > self.max_passes
 
-        if black and white:
-            return Colour.BOTH
-        elif black:
-            return Colour.BLACK
-        elif white:
-            return Colour.WHITE
-
-        return None
+        return self._winnerFromBools(black, white)
 
     def setBoard(self) -> None:
+        """
+        Configures the pieces in their starting position and updates their
+        activity flags.
+
+        Returns:
+            None
+        """
         # first row
         self.pieces[(0, 0)] = Archer(Colour.BLACK, (0, 0))
         self.pieces[(1, 0)] = King(Colour.BLACK, (1, 0))
@@ -227,6 +370,16 @@ class Game:
             self.pieces[p].updateActivity(self.pieces)
 
     def findKings(self) -> None:
+        """
+        Configures the pieces in their starting position and updates their
+        activity flags.
+
+        Returns:
+            None
+        
+        Raises:
+            BoardError: If the number of kings per team is not 1.
+        """
         counts = {Colour.BLACK: 0, Colour.WHITE: 0}
 
         for p in self.pieces:
@@ -238,18 +391,42 @@ class Game:
 
         for c in counts:
             if counts[c] != 1:
-                raise BoardError(f'{counts[c]} {c} kings found') 
-
+                raise BoardError(f'{counts[c]} {c} kings found for {c}') 
 
     def addPiecesToTeams(self) -> None:
+        """
+        Sets the self.team_pieces dict.
+
+        Returns:
+            None
+        """
         for i in self.pieces:
             if self.pieces[i]._colour is not None:
                 self.team_pieces[self.pieces[i]._colour].append(self.pieces[i])
 
     def _inbound(self, pos: Point) -> bool:
+        """
+        Checks if pos is within the board.
+
+        Args:
+            pos: The point to check.
+
+        Returns:
+            True if pos is within the board dimensions, else False.
+        """
         return 0 <= pos[0] <= self.WIDTH and 0 <= pos[1] <= self.HEIGHT
 
     def canSwap(self, pos1: Point, pos2: Point) -> bool:
+        """
+        Checks if swapping pos1 and pos2 is legal.
+
+        Args:
+            pos1: First position on the board.
+            pos2: Second position on the board.
+
+        Returns:
+            True if the swap is legal, else False.
+        """
         if (self.state != State.SWAP 
                 or not self._inbound(pos1)
                 or not self._inbound(pos2)):
@@ -262,6 +439,19 @@ class Game:
                 or (p2._colour == self.turn and p2.canSwap(p1)))
 
     def swap(self, pos1: Point, pos2: Point) -> None:
+        """
+        Performs the swap (pos1, pos2) if it is legal.
+
+        Args:
+            pos1: First position on the board.
+            pos2: Second position on the board.
+
+        Returns:
+            None
+
+        Raises:
+            SwapError: If the swap is not legal.
+        """
         if not self.canSwap(pos1, pos2):
             raise SwapError(f'{pos1=} and {pos2=} cannot be swapped') 
 
@@ -284,6 +474,16 @@ class Game:
         self.state = State.ACTION
 
     def canAction(self, pos: Point, targets: List[Point]) -> bool:
+        """
+        Checks if the piece at pos can perform an action on targets.
+
+        Args:
+            pos: The position of the piece on the board to perform the action.
+            targets: A list of positions to target with an action.
+
+        Returns:
+            True if the swap is legal, else False.
+        """
         if (self.state != State.ACTION
                 or not self._inbound(pos)
                 or self.pieces[pos]._colour != self.turn
@@ -295,6 +495,19 @@ class Game:
         return self.pieces[pos].canAction(trgts, self.pieces)
 
     def action(self, pos: Point, targets: List[Point]) -> None:
+        """
+        Performs the action if it is legal.
+
+        Args:
+            pos: The position of the piece on the board to perform the action.
+            targets: A list of positions to target with an action.
+
+        Returns:
+            None
+
+        Raises:
+            ActionError: If the action is not legal.
+        """
         if not self.canAction(pos, targets):
             raise ActionError(f'Can\'t perform action {pos} {targets}')
 
@@ -315,35 +528,52 @@ class Game:
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
 
     def skipAction(self) -> None:
+        """
+        Skips the current player's turn action.
+
+        Returns:
+            None
+        """
         self.passes[self.turn] += 1
         self.state = State.SWAP
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
 
     def listSwaps(self) -> Set[Tuple[Piece]]:
+        """
+        Returns the legal swaps.
+        
+        Returns:
+            A set of tuples which present the legal swaps for the board. Each
+            tuple contians two positions on the board.
+        """
         out = set()
-        team = self.team_pieces[self.turn]
+        
+        if self.state == State.SWAP:
+            team = self.team_pieces[self.turn]
 
-        for p in team:
-            out.update(p.listSwaps(self.pieces))
+            for p in team:
+                out.update(p.listSwaps(self.pieces))
 
         return out
 
     def listActions(self) -> List[Action]:
+        """
+        Returns the legal actions.
+        
+        Returns:
+            A list of actions. See piece.py for the definition of an Action.
+        """
         out = []
-        team = self.team_pieces[self.turn]
 
-        for p in team:
-            out += p.listActions(self.pieces)
+        if self.state == State.ACTION:
+            team = self.team_pieces[self.turn]
+
+            for p in team:
+                out += p.listActions(self.pieces)
 
         return out
     
 
 if __name__ == '__main__':
-    from copy import deepcopy
     g = Game()
-    #g2 = deepcopy(g)
     g.play()
-    #g.swap((0,0), (1, 0))
-    #print(g)
-    #print('-'*30)
-    #print(g2)

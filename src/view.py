@@ -1,6 +1,7 @@
 import pygame
 import time
 from game import Game, State
+from bot import RandomBot
 
 
 class View:
@@ -11,6 +12,7 @@ class View:
 
         self.game = game
         self.game.subscribe(self.drawTile)
+        self.game.subscribe(self.drawState, msg_type='turn')
         self.addInput = self.game.addInput if addInput is None else addInput
 
         self.res = resolution
@@ -26,14 +28,19 @@ class View:
 
         self.selection = []
 
+        # temporary
+        self.bot = RandomBot(game, game.turn)
+        self.game.subscribe(self.bot.moveCallback, msg_type='turn')
+
     def start(self):
         self.drawAllTiles()
-        self.drawState()
+        self.drawState(str(self.game.turn), str(self.game.state))
 
         while True:
             if self.game.won:
                 print('FINISHED')
-                return
+                self.game.resetBoard()
+                continue
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -62,7 +69,7 @@ class View:
                         self.selection.clear()
                         time.sleep(0.1)
 
-                self.drawState()
+                #self.drawState()
 
             pygame.display.update()
 
@@ -110,12 +117,12 @@ class View:
         for p in self.possibleActions():
             self.drawTile(p, str(self.game.pieces[p]), (255, 165, 0))
 
-    def drawState(self):
+    def drawState(self, turn_str, state_str):
         x_offset = self.rect_width*self.game.WIDTH
         text_y_offset = self.font.size
 
-        whose_turn = 'Black' if str(self.game.turn) == 'Colour.BLACK' else 'White'
-        turn_type = 'Swap' if str(self.game.state) == 'State.SWAP' else 'Action'
+        whose_turn = 'Black' if turn_str == 'Colour.BLACK' else 'White'
+        turn_type = 'Swap' if state_str == 'State.SWAP' else 'Action'
         black_passes, white_passes = self.game.passes.values()
 
         black = (0, 0, 0)
@@ -176,12 +183,15 @@ class View:
 
 if __name__ == '__main__':
     import threading
+    import logging
+    logging.basicConfig(format='%(levelname)s <%(asctime)s> %(message)s', level=logging.INFO)
 
     game = Game()
     g_thread = threading.Thread(target=game.play, daemon=True)
-    g_thread.start()
 
     view = View(game, resolution=(1920, 1080))
+    g_thread.start()
+
     try:
         view.start()
     except KeyboardInterrupt:

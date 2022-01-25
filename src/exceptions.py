@@ -9,3 +9,6 @@ class BoardError(Exception):
 
 class InputError(Exception):
     pass
+
+class TurnError(Exception):
+    pass
