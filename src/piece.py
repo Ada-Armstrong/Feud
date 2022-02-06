@@ -5,8 +5,7 @@ from colour import Colour
 
 Point = Tuple[int, int]
 Pieces = Dict[Point, 'Piece']
-Action = Dict['Piece', List['Piece']]
-
+Action = Dict['Piece', List['Piece']] 
 class Piece(ABC):
     '''
     An abstract base class for a Feud Piece. Implements swapping functionality.
@@ -37,7 +36,7 @@ class Piece(ABC):
             max_trgts: int = 1
             ):
         self._max_hp: int = max_hp
-        self._hp: int = min(hp, max_hp)
+        self._hp: int = min(hp, self._max_hp)
         self._active: bool = active
         self._colour: Optional[Colour] = colour
         self._pos: Point = pos
@@ -81,9 +80,8 @@ class Piece(ABC):
                 and self.distance(piece) == 1)
 
     def applySwap(self, piece: 'Piece') -> None:
-        if not self.canSwap(piece):
-            raise SwapError('{self} and {piece} are not swapable')
-
+        #if not self.canSwap(piece):
+            #raise SwapError(f'{self} and {piece} are not swapable')
         self._pos, piece._pos = piece._pos, self._pos
 
     def listSwaps(self, pieces: Pieces) -> Set[Tuple['Piece', 'Piece']]:

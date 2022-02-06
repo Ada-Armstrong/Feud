@@ -1,18 +1,29 @@
 import pygame
 import time
-from game import Game, State
+from game import GameManager, State
 from bot import RandomBot
+from mcts import MCTSBot
+from alphabeta import AlphaBetaBot
 
 
 class View:
+
+    BLACK = (0, 0, 0)
+    WHITE = (255, 255, 255)
+    GREY = (128, 128, 128)
+    RED = (255, 0, 0)
+    BLUE = (0, 0, 255)
 
     def __init__(self, game, display=None, addInput=None, resolution=(640, 480)):
         if not pygame.get_init():
             pygame.init()
 
         self.game = game
+        # subscribe to the different messages
         self.game.subscribe(self.drawTile)
         self.game.subscribe(self.drawState, msg_type='turn')
+        self.game.subscribe(self.drawWinner, msg_type='finished')
+
         self.addInput = self.game.addInput if addInput is None else addInput
 
         self.res = resolution
@@ -23,21 +34,24 @@ class View:
 
         # tile dimensions
         smaller_dim = min(self.res[0], self.res[1])
-        self.rect_width = smaller_dim / self.game.WIDTH
-        self.rect_height = smaller_dim / self.game.HEIGHT
+        g_width, g_height = self.game.dims()
+        self.rect_width = smaller_dim / g_width
+        self.rect_height = smaller_dim / g_height
 
         self.selection = []
 
         # temporary
-        self.bot = RandomBot(game, game.turn)
+        #self.bot = MCTSBot(game, game.turn())
+        self.bot = AlphaBetaBot(game, game.turn())
+        #self.bot = RandomBot(game, game.turn())
         self.game.subscribe(self.bot.moveCallback, msg_type='turn')
 
     def start(self):
         self.drawAllTiles()
-        self.drawState(str(self.game.turn), str(self.game.state))
+        self.drawState(str(self.game.turn()), str(self.game.state()))
 
         while True:
-            if self.game.won:
+            if self.game.won():
                 print('FINISHED')
                 self.game.resetBoard()
                 continue
@@ -53,23 +67,22 @@ class View:
 
                     self.drawAllTiles()
 
-                    if self.game.state == State.SWAP:
+                    if self.game.state() == State.SWAP:
                         self.handleSwap(pos_game_space)
                     else:
                         self.handleAction(pos_game_space)
 
                     for p in self.selection:
-                        self.drawTile(p, str(self.game.pieces[p]), (0, 255, 0))
+                        self.drawTile(p, str(self.game.pieces()[p]), (0, 255, 0))
 
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                    if (self.game.state == State.SWAP and len(self.selection) == 2) or (self.game.state == State.ACTION):
+                    if (self.game.state() == State.SWAP and len(self.selection) == 2) or (self.game.state() == State.ACTION):
                         self.drawAllTiles()
-                        move_string = ' '.join([self.game._cord2str(p) for p in self.selection])
+                        move_string = ' '.join([self.game.cord2str(p) for p in self.selection])
                         self.addInput(move_string)
                         self.selection.clear()
-                        time.sleep(0.1)
-
-                #self.drawState()
+                        time.sleep(0.5)
+                        self.drawAllTiles()
 
             pygame.display.update()
 
@@ -77,7 +90,7 @@ class View:
         if not (n := len(self.selection)):
             possible_swaps = {p._pos for swap in self.game.listSwaps() for p in swap}
         elif n == 1:
-            piece = self.game.pieces[self.selection[0]]
+            piece = self.game.pieces()[self.selection[0]]
             possible_swaps = {p._pos for swap in self.game.listSwaps() for p in swap if piece in swap}
         else:
             possible_swaps = set()
@@ -87,9 +100,9 @@ class View:
     def possibleActions(self):
         if not (n := len(self.selection)):
             possible_actions = {p._pos for action in self.game.listActions() for p in action}
-        elif 1 <= n <= self.game.pieces[self.selection[0]]._max_trgts:
-            piece = self.game.pieces[self.selection[0]]
-            possible_actions = {p._pos for action in piece.listActions(self.game.pieces) for targets in action.values() for p in targets}
+        elif 1 <= n <= self.game.pieces()[self.selection[0]]._max_trgts:
+            piece = self.game.pieces()[self.selection[0]]
+            possible_actions = {p._pos for action in piece.listActions(self.game.pieces()) for targets in action.values() for p in targets}
         else:
             possible_actions = set()
 
@@ -102,7 +115,7 @@ class View:
             self.selection.remove(pos)
 
         for p in self.possibleSwaps():
-            self.drawTile(p, str(self.game.pieces[p]), (255, 165, 0))
+            self.drawTile(p, str(self.game.pieces()[p]), (255, 165, 0))
 
     def handleAction(self, pos):
         if pos not in self.selection and pos in self.possibleActions():
@@ -115,17 +128,31 @@ class View:
                 self.selection.clear()
 
         for p in self.possibleActions():
-            self.drawTile(p, str(self.game.pieces[p]), (255, 165, 0))
+            self.drawTile(p, str(self.game.pieces()[p]), (255, 165, 0))
+
+    def drawWinner(self, winner_str):
+        if winner_str == 'None':
+            finished_text = 'It was a draw'
+        elif winner_str == 'Colour.BLACK':
+            finished_text = 'Black won!'
+        elif winner_str == 'Colour.WHITE':
+            finished_text = 'White won!'
+
+        print(finished_text)
+
+        #title = self.font.render(finished_text, 1, self.BLACK)
+        #title_rect = title.get_rect(center=(res[0]/2, res[1]/2))
+        #self.display.blit(title, title_rect)
 
     def drawState(self, turn_str, state_str):
-        x_offset = self.rect_width*self.game.WIDTH
+        g_width = self.game.dims()[0]
+
+        x_offset = self.rect_width * g_width
         text_y_offset = self.font.size
 
         whose_turn = 'Black' if turn_str == 'Colour.BLACK' else 'White'
         turn_type = 'Swap' if state_str == 'State.SWAP' else 'Action'
-        black_passes, white_passes = self.game.passes.values()
-
-        black = (0, 0, 0)
+        black_passes, white_passes = self.game.passes()
 
         pygame.draw.rect(
                 surface=self.display,
@@ -134,36 +161,35 @@ class View:
                 width=0
                 )
 
-        self.font.render_to(self.display, (x_offset, text_y_offset), f'{whose_turn}\'s {turn_type}', black)
-        self.font.render_to(self.display, (x_offset, text_y_offset*2), f'Black Passes: {black_passes}', black)
-        self.font.render_to(self.display, (x_offset, text_y_offset*3), f'White Passes: {white_passes}', black)
+        self.font.render_to(self.display, (x_offset, text_y_offset), f'{whose_turn}\'s {turn_type}', self.BLACK)
+        self.font.render_to(self.display, (x_offset, text_y_offset*2), f'Black Passes: {black_passes}', self.BLACK)
+        self.font.render_to(self.display, (x_offset, text_y_offset*3), f'White Passes: {white_passes}', self.BLACK)
 
     def drawAllTiles(self):
-        for col in range(self.game.WIDTH):
-            for row in range(self.game.HEIGHT):
+        cols, rows = self.game.dims()
+
+        for col in range(cols):
+            for row in range(rows):
                 pos = (col, row)
-                self.drawTile(pos, str(self.game.pieces[pos]))
+                self.drawTile(pos, str(self.game.pieces()[pos]))
 
     def drawTile(self, position, tile_data, border_color=None):
         x, y = position
         color, piece_type, hp, active = tile_data.split()
 
-        white = (255, 255, 255)
-        black = (0, 0, 0)
-        grey = (128, 128, 128)
         border_width = 10
 
         if color == 'Colour.BLACK':
-            bg_color = black
+            bg_color = self.BLACK
         elif color == 'Colour.WHITE':
-            bg_color = white
+            bg_color = self.WHITE
         else:
-            bg_color = grey
+            bg_color = self.GREY
 
         if border_color is None:
-            border_color = (0, 0, 255) if active == 'True' else (255, 0, 0)
+            border_color = self.BLUE if active == 'True' else self.RED
 
-        text_color = white if bg_color == black else black
+        text_color = self.WHITE if bg_color == self.BLACK else self.BLACK
 
         pygame.draw.rect(
                 surface=self.display,
@@ -186,7 +212,7 @@ if __name__ == '__main__':
     import logging
     logging.basicConfig(format='%(levelname)s <%(asctime)s> %(message)s', level=logging.INFO)
 
-    game = Game()
+    game = GameManager()
     g_thread = threading.Thread(target=game.play, daemon=True)
 
     view = View(game, resolution=(1920, 1080))

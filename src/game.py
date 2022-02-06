@@ -2,6 +2,7 @@ import logging
 from typing import Type, Dict, List, Set, Tuple, Optional
 from enum import Enum
 from queue import Queue
+from copy import deepcopy
 
 from piece import Piece, Pieces, Point, Action
 from colour import Colour
@@ -23,15 +24,12 @@ TeamPieces = Dict[Type[Colour], List[Type[Piece]]]
 
 class Game:
     """
-    Manages the board and game state for Feud.
+    Represents the board and game state for Feud.
 
     Attributes:
         WIDTH: The width of the board.
         HEIGHT: The HEIGHT of the board.
         max_passes: The maximum number of passes a player can do before forfeiting.
-        msg_types: A list of legal message types for subscribe and notify.
-        subscribers: A dict containing the callback functions for each message type.
-        input_queue: A queue that stores the moves to be played.
         won: The team Colour which has won.
         state: Whether the game is in SWAP or ACTION.
         turn: Whose turn it is to play.
@@ -45,10 +43,6 @@ class Game:
         self.WIDTH: int = 4
         self.HEIGHT: int = 4
         self.max_passes: int = 2
-
-        self.msg_types = ['board', 'turn']
-        self.subscribers = {msg_type:[] for msg_type in self.msg_types}
-        self.input_queue = Queue()
 
         self.resetBoard()
 
@@ -140,145 +134,6 @@ class Game:
         """
         return chr(cord[0] + ord('a')) + str(cord[1] + 1)
 
-    def subscribe(self, callback, msg_type='board') -> None:
-        """
-        Subscribes a callback function to a specific msg_type. For example
-        msg_type=board calls the callback function whenever a piece is moved or
-        mutated on the board.
-
-        Args:
-            callback: The callback function to run when notify is called for the
-                        message type. For msg_type=board the callback must take
-                        pos, string
-            msg_type: A string representing the types of message to subscribe to.
-
-        Returns:
-            None
-
-        Raises:
-            TypeError: If msg_type is not valid.
-        """
-        if msg_type not in self.msg_types:
-            raise TypeError(f'{msg_type} not a valid msg_type')
-        self.subscribers[msg_type].append(callback)
-
-    def notify(self, pos=None, msg_type: str='board') -> None:
-        """
-        Runs the callback functions for a specific msg_type.
-
-        Args:
-            msg_type: A string representing the types of message to run callback
-                        functions for.
-
-        Returns:
-            None
-
-        Raises:
-            TypeError: If msg_type is not valid.
-        """
-        if msg_type not in self.msg_types:
-            raise TypeError(f'{msg_type} not a valid msg_type')
-
-        if msg_type == 'board':
-            data = [pos, str(self.pieces[pos])]
-        elif msg_type == 'turn':
-            data = [str(self.turn), str(self.state)]
-
-        for callback in self.subscribers[msg_type]:
-            #callback(pos, str(self.pieces[pos]))
-            callback(*data)
-
-    def addInput(self, in_str: str) -> None:
-        """
-        Queues a move.
-
-        Args:
-            in_str: The move to queue in string format. See _str2cord for the
-                        format that the string should be in.
-
-        Returns:
-            None
-        """
-        self.input_queue.put(in_str)
-
-    def getInput(self) -> str:
-        """
-        Retrieves the first element in the input queue.
-
-        Returns:
-            A string representing a move.
-        """
-        return self.input_queue.get()
-
-    def play(self) -> None:
-        """
-        Starts the game loop.
-
-        Returns:
-            None
-        """
-        while 1:
-            logging.debug(self)
-
-            if loser := (self.isolated() or self.kingDead() or self.tooManyPasses()):
-                if loser == Colour.BLACK:
-                    self.won = Colour.WHITE
-                elif loser == Colour.WHITE:
-                    self.won = Colour.BLACK
-                else:
-                    self.won = Colour.BOTH
-
-                logging.debug(f'{self.won} won')
-                break
-
-            self.notify(msg_type='turn')
-
-            if self.state == State.SWAP:
-                logging.debug(f'{self.turn} to swap')
-
-                while 1:
-                    start, end = self.getInput().split()
-                    logging.debug(f'{start} {end}')
-
-                    try:
-                        start_fmt = self._str2cord(start) 
-                        end_fmt = self._str2cord(end)
-                    except InputError as e:
-                        logging.warning(e)
-                        continue
-
-                    try:
-                        self.swap(start_fmt, end_fmt)
-                        break
-                    except SwapError as e:
-                        logging.warning(e)
-
-            else:
-                logging.debug(f'{self.turn} to action')
-
-                while 1:
-                    str_cords = self.getInput().split()
-                    logging.debug(str_cords)
-
-                    try:
-                        cords = [self._str2cord(s) for s in str_cords]
-                    except InputError as e:
-                        logging.warning(e)
-                        continue
-
-                    if len(cords) == 0:
-                        self.skipAction()
-                        break
-
-                    if len(cords) < 2:
-                        logging.warning('Need at least 2 cordinates to preform an action')
-                        continue
-
-                    try:
-                        self.action(cords[0], cords[1:])
-                        break
-                    except ActionError as e:
-                        logging.warning(e)
 
     def _winnerFromBools(self, black: bool, white: bool) -> Colour:
         """
@@ -371,27 +226,17 @@ class Game:
 
     def findKings(self) -> None:
         """
-        Configures the pieces in their starting position and updates their
-        activity flags.
+        Sets the kings variable to track the location of the kings.
 
         Returns:
             None
-        
-        Raises:
-            BoardError: If the number of kings per team is not 1.
         """
-        counts = {Colour.BLACK: 0, Colour.WHITE: 0}
 
         for p in self.pieces:
             piece = self.pieces[p]
 
-            if type(piece) is King:
+            if type(piece) is King and piece._colour:
                 self.kings[piece._colour] = piece
-                counts[piece._colour] += 1
-
-        for c in counts:
-            if counts[c] != 1:
-                raise BoardError(f'{counts[c]} {c} kings found for {c}') 
 
     def addPiecesToTeams(self) -> None:
         """
@@ -400,6 +245,9 @@ class Game:
         Returns:
             None
         """
+        self.team_pieces[Colour.BLACK].clear()
+        self.team_pieces[Colour.WHITE].clear()
+
         for i in self.pieces:
             if self.pieces[i]._colour is not None:
                 self.team_pieces[self.pieces[i]._colour].append(self.pieces[i])
@@ -438,7 +286,7 @@ class Game:
         return ((p1._colour == self.turn and p1.canSwap(p2))
                 or (p2._colour == self.turn and p2.canSwap(p1)))
 
-    def swap(self, pos1: Point, pos2: Point) -> None:
+    def swap(self, pos1: Point, pos2: Point, notify=None) -> None:
         """
         Performs the swap (pos1, pos2) if it is legal.
 
@@ -465,13 +313,24 @@ class Game:
         # update activity of pieces and neighbours
         for i in p1.neighbourPositions():
             self.pieces[i].updateActivity(self.pieces)
-            self.notify(i)
+            if notify is not None:
+                notify(i)
 
         for i in p2.neighbourPositions():
             self.pieces[i].updateActivity(self.pieces)
-            self.notify(i)
+            if notify is not None:
+                notify(i)
 
         self.state = State.ACTION
+
+        loser = self.isolated()
+
+        if loser == Colour.BLACK:
+            self.won = Colour.WHITE
+        elif loser == Colour.WHITE:
+            self.won = Colour.BLACK
+        elif loser == Colour.BOTH:
+            self.won = Colour.BOTH
 
     def canAction(self, pos: Point, targets: List[Point]) -> bool:
         """
@@ -494,7 +353,7 @@ class Game:
 
         return self.pieces[pos].canAction(trgts, self.pieces)
 
-    def action(self, pos: Point, targets: List[Point]) -> None:
+    def action(self, pos: Point, targets: List[Point], notify=None) -> None:
         """
         Performs the action if it is legal.
 
@@ -514,18 +373,35 @@ class Game:
         action_piece = self.pieces[pos]
         trgts = [self.pieces[p] for p in targets]
 
-        self.pieces[pos].applyAction(trgts, self.pieces)
-        self.notify(action_piece._pos)
+        action_piece.applyAction(trgts, self.pieces)
+        action_piece.updateActivity(self.pieces)
+
+        if notify is not None:
+            notify(action_piece._pos)
 
         for piece in trgts:
-            self.notify(piece._pos)
+            piece.updateActivity(self.pieces)
+
+            if notify is not None:
+                notify(piece._pos)
+
             for i in piece.neighbourPositions():
                 self.pieces[i].updateActivity(self.pieces)
-                self.notify(i)
+                if notify is not None:
+                    notify(i)
 
         self.passes[self.turn] = 0
         self.state = State.SWAP
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
+
+        loser = self.isolated() or self.kingDead()
+
+        if loser == Colour.BLACK:
+            self.won = Colour.WHITE
+        elif loser == Colour.WHITE:
+            self.won = Colour.BLACK
+        elif loser == Colour.BOTH:
+            self.won = Colour.BOTH
 
     def skipAction(self) -> None:
         """
@@ -537,6 +413,15 @@ class Game:
         self.passes[self.turn] += 1
         self.state = State.SWAP
         self.turn = Colour.BLACK if self.turn == Colour.WHITE else Colour.WHITE
+
+        loser = self.tooManyPasses()
+
+        if loser == Colour.BLACK:
+            self.won = Colour.WHITE
+        elif loser == Colour.WHITE:
+            self.won = Colour.BLACK
+        elif loser == Colour.BOTH:
+            self.won = Colour.BOTH
 
     def listSwaps(self) -> Set[Tuple[Piece]]:
         """
@@ -558,12 +443,12 @@ class Game:
 
     def listActions(self) -> List[Action]:
         """
-        Returns the legal actions.
+        Returns the legal actions. The empty dict represents the skip action.
         
         Returns:
             A list of actions. See piece.py for the definition of an Action.
         """
-        out = []
+        out = [{}]
 
         if self.state == State.ACTION:
             team = self.team_pieces[self.turn]
@@ -572,8 +457,214 @@ class Game:
                 out += p.listActions(self.pieces)
 
         return out
+
+
+class GameManager:
+    """
+    Manages the board and game state for Feud.
+
+    Attributes:
+        game: The representation of the game.
+        msg_types: A list of legal message types for subscribe and notify.
+        subscribers: A dict containing the callback functions for each message type.
+        input_queue: A queue that stores the moves to be played.
+    """
+
+    def __init__(self):
+        self.game = Game()
+
+        self.msg_types = ['board', 'turn', 'finished']
+        self.subscribers = {msg_type:[] for msg_type in self.msg_types}
+        self.input_queue = Queue()
+
+    def dims(self):
+        return (self.game.WIDTH, self.game.HEIGHT)
+
+    def turn(self):
+        return self.game.turn
+
+    def state(self):
+        return self.game.state
+
+    def won(self):
+        return self.game.won
+
+    def pieces(self):
+        return self.game.pieces
+
+    def resetBoard(self):
+        self.game.resetBoard()
+
+    def passes(self):
+        # TODO: temporary
+        return self.game.passes.values()
+
+    def subscribe(self, callback, msg_type='board') -> None:
+        """
+        Subscribes a callback function to a specific msg_type. For example
+        msg_type=board calls the callback function whenever a piece is moved or
+        mutated on the board.
+
+        Args:
+            callback: The callback function to run when notify is called for the
+                        message type. For msg_type=board the callback must take
+                        pos, string
+            msg_type: A string representing the types of message to subscribe to.
+
+        Returns:
+            None
+
+        Raises:
+            TypeError: If msg_type is not valid.
+        """
+        if msg_type not in self.msg_types:
+            raise TypeError(f'{msg_type} not a valid msg_type')
+        self.subscribers[msg_type].append(callback)
+
+    def notify(self, pos=None, msg_type: str='board') -> None:
+        """
+        Runs the callback functions for a specific msg_type.
+
+        Args:
+            msg_type: A string representing the types of message to run callback
+                        functions for.
+
+        Returns:
+            None
+
+        Raises:
+            TypeError: If msg_type is not valid.
+        """
+        if msg_type not in self.msg_types:
+            raise TypeError(f'{msg_type} not a valid msg_type')
+
+        if msg_type == 'board':
+            data = [pos, str(self.game.pieces[pos])]
+        elif msg_type == 'turn':
+            data = [str(self.turn()), str(self.state())]
+        elif msg_type == 'finished':
+            data = [str(self.won())]
+
+        for callback in self.subscribers[msg_type]:
+            callback(*data)
+
+    def addInput(self, in_str: str) -> None:
+        """
+        Queues a move.
+
+        Args:
+            in_str: The move to queue in string format. See _str2cord for the
+                        format that the string should be in.
+
+        Returns:
+            None
+        """
+        self.input_queue.put(in_str)
+
+    def getInput(self) -> str:
+        """
+        Retrieves the first element in the input queue.
+
+        Returns:
+            A string representing a move.
+        """
+        return self.input_queue.get()
+
+    def cord2str(self, p):
+        return self.game._cord2str(p)
+
+    def str2cord(self, s):
+        return self.game._str2cord(s)
+
+    def listSwaps(self):
+        return self.game.listSwaps()
+
+    def listActions(self):
+        return self.game.listActions()
+
+    def swap(self, pos1: Point, pos2: Point) -> None:
+        self.game.swap(pos1, pos2, self.notify)
+
+    def action(self, pos: Point, targets: List[Point]) -> None:
+        self.game.action(pos, targets, self.notify)
+
+    def play(self) -> None:
+        """
+        Starts the game loop.
+
+        Returns:
+            None
+        """
+        while 1:
+            logging.debug(self.game)
+
+            if loser := (self.game.isolated() or self.game.kingDead() or self.game.tooManyPasses()):
+                if loser == Colour.BLACK:
+                    self.game.won = Colour.WHITE
+                elif loser == Colour.WHITE:
+                    self.game.won = Colour.BLACK
+                else:
+                    self.game.won = Colour.BOTH
+
+                logging.debug(f'{self.won} won')
+                self.notify(msg_type='finished')
+                break
+
+            self.notify(msg_type='turn')
+
+            if self.state() == State.SWAP:
+                logging.debug(f'{self.game.turn} to swap')
+
+                while 1:
+                    start, end = self.getInput().split()
+                    logging.debug(f'{start} {end}')
+
+                    try:
+                        start_fmt = self.game._str2cord(start) 
+                        end_fmt = self.game._str2cord(end)
+                    except InputError as e:
+                        logging.warning(e)
+                        continue
+
+                    try:
+                        self.swap(start_fmt, end_fmt)
+                        break
+                    except SwapError as e:
+                        logging.warning(e)
+
+            else:
+                logging.debug(f'{self.game.turn} to action')
+
+                while 1:
+                    str_cords = self.getInput().split()
+                    logging.debug(str_cords)
+
+                    try:
+                        cords = [self.game._str2cord(s) for s in str_cords]
+                    except InputError as e:
+                        logging.warning(e)
+                        continue
+
+                    if len(cords) == 0:
+                        self.game.skipAction()
+                        break
+
+                    if len(cords) < 2:
+                        logging.warning('Need at least 2 cordinates to preform an action')
+                        continue
+
+                    try:
+                        self.action(cords[0], cords[1:])
+                        break
+                    except ActionError as e:
+                        logging.warning(e)
     
 
 if __name__ == '__main__':
     g = Game()
-    g.play()
+    g2 = deepcopy(g)
+    g2.swap((0,0), (1,0))
+
+    print(g)
+    print('*'*50)
+    print(g2)
