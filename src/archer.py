@@ -9,7 +9,7 @@ class Archer(Piece):
         super().__init__(3, hp, False, colour, pos, False, True)
 
     def __str__(self):
-        return f'{self._colour} A {self._hp} {self._active}'
+        return 'A ' + super().__str__()
 
     def _inSameCol(self, piece: Piece) -> bool:
         return self._pos[0] == piece._pos[0]

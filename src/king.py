@@ -9,7 +9,7 @@ class King(Piece):
         super().__init__(4, hp, False, colour, pos, False, True)
 
     def __str__(self):
-        return f'{self._colour} K {self._hp} {self._active}'
+        return 'K ' + super().__str__()
 
     def canAction(self, targets: List['Piece'], pieces: Pieces) -> bool:
         return (len(targets) == 1

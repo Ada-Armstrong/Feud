@@ -10,7 +10,7 @@ class Knight(Piece):
         super().__init__(3, hp, False, colour, pos, False, True, 2)
 
     def __str__(self):
-        return f'{self._colour} N {self._hp} {self._active}'
+        return 'N ' + super().__str__()
 
     def canAction(self, targets: List['Piece'], pieces: Pieces) -> bool:
         if not (1 <= len(targets) <= 2 and self._active):

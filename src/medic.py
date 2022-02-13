@@ -10,7 +10,7 @@ class Medic(Piece):
         super().__init__(3, hp, False, colour, pos, False, True, 4)
 
     def __str__(self):
-        return f'{self._colour} M {self._hp} {self._active}'
+        return 'M ' + super().__str__()
 
     def canAction(self, targets: List['Piece'], pieces: Pieces) -> bool:
         if not (1 <= len(targets) <= 4 and self._active):

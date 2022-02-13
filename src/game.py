@@ -207,7 +207,7 @@ class Game:
         self.pieces[(3, 0)] = Archer(Colour.BLACK, (3, 0))
         # second row
         self.pieces[(0, 1)] = Knight(Colour.BLACK, (0, 1))
-        self.pieces[(1, 1)] = Shield(Colour.BLACK, (1, 1))
+        self.pieces[(1, 1)] = Shield(Colour.BLACK, (1, 1), hp=3)
         self.pieces[(2, 1)] = Wizard(Colour.BLACK, (2, 1))
         self.pieces[(3, 1)] = Knight(Colour.BLACK, (3, 1))
         # third row

@@ -40,7 +40,8 @@ class Node:
 class AlphaBetaBot(Bot):
 
     def chooseMove(self, time=None):
-        depth = 4
+        # set the depth dynamically based on the number of alive pieces
+        depth = 12 - self.numberOfAlivePieces()//2
         root = Node(self.manager.game, None)
         self.visited = 0
 
@@ -51,6 +52,15 @@ class AlphaBetaBot(Bot):
         print(choice.data)
 
         return choice.data
+
+    def numberOfAlivePieces(self):
+        count = 0
+
+        for p in self.manager.game.pieces:
+            if self.manager.game.pieces[p]._hp > 0:
+                count += 1
+
+        return count
 
     def stateHeuristic(self, node, maximizing_player):
         if node.state.won == Colour.BOTH:

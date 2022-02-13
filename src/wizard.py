@@ -9,7 +9,7 @@ class Wizard(Piece):
         super().__init__(3, hp, False, colour, pos, False, True)
 
     def __str__(self):
-        return f'{self._colour} W {self._hp} {self._active}'
+        return 'W ' + super().__str__()
 
     def canAction(self, targets: List['Piece'], pieces: Pieces) -> bool:
         return (len(targets) == 1

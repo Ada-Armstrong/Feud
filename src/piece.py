@@ -44,6 +44,9 @@ class Piece(ABC):
         self._swapable: bool = swapable
         self._max_trgts: int = max_trgts
 
+    def __str__(self):
+        return f'{self._colour} {self._hp} {self._max_hp} {self._active}'
+
     def neighbourPositions(self, boardWidth: int=4) -> List[Point]:
         return [ (x, y) for i in range(len(self.x_dir)) if 0 <= (x := self._pos[0]+self.x_dir[i]) < boardWidth and 0 <= (y := self._pos[1]+self.y_dir[i]) < boardWidth ]
 

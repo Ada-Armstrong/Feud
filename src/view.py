@@ -1,4 +1,5 @@
 import pygame
+import os
 import time
 from game import GameManager, State
 from bot import RandomBot
@@ -13,6 +14,7 @@ class View:
     GREY = (128, 128, 128)
     RED = (255, 0, 0)
     BLUE = (0, 0, 255)
+    GREEN = (0, 255, 0)
 
     def __init__(self, game, display=None, addInput=None, resolution=(640, 480)):
         if not pygame.get_init():
@@ -37,14 +39,42 @@ class View:
         g_width, g_height = self.game.dims()
         self.rect_width = smaller_dim / g_width
         self.rect_height = smaller_dim / g_height
+        self.border_width = 0.05*self.rect_height
 
         self.selection = []
+
+        # load assets
+        self.loadAssets()
 
         # temporary
         #self.bot = MCTSBot(game, game.turn())
         self.bot = AlphaBetaBot(game, game.turn())
         #self.bot = RandomBot(game, game.turn())
         self.game.subscribe(self.bot.moveCallback, msg_type='turn')
+
+    def fill(self, surface, color):
+        """Copy the surface and change color"""
+        s = surface.copy()
+        w, h = s.get_size()
+        r, g, b = color
+
+        for x in range(w):
+            for y in range(h):
+                a = s.get_at((x, y))[3]
+                s.set_at((x, y), pygame.Color(r, g, b, a))
+
+        return s
+
+    def loadAssets(self):
+        image_paths = ['king.png', 'shield.png', 'night.png', 'archer.png', 'medic.png', 'wizard.png']
+        self.assets = {}
+        size=(self.rect_width - self.border_width, self.rect_height - self.border_width),
+
+        for p in image_paths:
+            path = os.path.join("../assets", p)
+            img = pygame.image.load(path)
+            img = pygame.transform.scale(img, size)
+            self.assets[p[0].capitalize()] = {'W': img, 'B': self.fill(img, self.WHITE)}
 
     def start(self):
         self.drawAllTiles()
@@ -90,7 +120,7 @@ class View:
         if not (n := len(self.selection)):
             possible_swaps = {p._pos for swap in self.game.listSwaps() for p in swap}
         elif n == 1:
-            piece = self.game.pieces()[self.selection[0]]
+            piece = self.game.pieces()[self.selection[0]] 
             possible_swaps = {p._pos for swap in self.game.listSwaps() for p in swap if piece in swap}
         else:
             possible_swaps = set()
@@ -140,9 +170,7 @@ class View:
 
         print(finished_text)
 
-        #title = self.font.render(finished_text, 1, self.BLACK)
-        #title_rect = title.get_rect(center=(res[0]/2, res[1]/2))
-        #self.display.blit(title, title_rect)
+        self.font.render_to(self.display, (self.res[0]/2, self.res[1]/2), finished_text, self.GREEN)
 
     def drawState(self, turn_str, state_str):
         g_width = self.game.dims()[0]
@@ -175,14 +203,14 @@ class View:
 
     def drawTile(self, position, tile_data, border_color=None):
         x, y = position
-        color, piece_type, hp, active = tile_data.split()
-
-        border_width = 10
+        piece_type, color, hp, max_hp, active = tile_data.split()
 
         if color == 'Colour.BLACK':
             bg_color = self.BLACK
+            color = 'B'
         elif color == 'Colour.WHITE':
             bg_color = self.WHITE
+            color = 'W'
         else:
             bg_color = self.GREY
 
@@ -200,11 +228,32 @@ class View:
         pygame.draw.rect(
                 surface=self.display,
                 color=bg_color,
-                rect=(self.rect_width*x + border_width/2, self.rect_height*y + border_width / 2, self.rect_width - border_width, self.rect_height - border_width),
+                rect=(self.rect_width*x + self.border_width/2, self.rect_height*y + self.border_width/2, self.rect_width - self.border_width, self.rect_height - self.border_width),
                 width=0
                 )
+
         if int(hp) > 0:
-            self.font.render_to(self.display, (self.rect_width*(x + 0.5), self.rect_height*(y + 0.5)), f'{piece_type} {hp}', text_color)
+            hp = int(hp)
+            max_hp = int(max_hp)
+            self.display.blit(self.assets[piece_type][color], (self.rect_width*x + self.border_width/2, self.rect_height*y + self.border_width/2))
+
+            r = 0.05*self.rect_height
+            shift = (max_hp-1)*r*3/2
+
+            for i in range(max_hp):
+                pygame.draw.circle(
+                        surface=self.display,
+                        color=self.RED,
+                        center=(self.rect_width*(x+0.5) + i*r*3 - shift, self.rect_height*(y+0.9)),
+                        radius=r
+                        )
+                if i < hp:
+                    pygame.draw.circle(
+                            surface=self.display,
+                            color=self.GREEN,
+                            center=(self.rect_width*(x+0.5) + i*r*3 - shift, self.rect_height*(y+0.9)),
+                            radius=r
+                            )
 
 
 if __name__ == '__main__':
